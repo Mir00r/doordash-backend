@@ -31,7 +31,11 @@ public class GlobalExceptionHandler {
   @ExceptionHandler({
     OrderNotFoundException.class,
     CartNotFoundException.class,
-    RestaurantNotFoundException.class
+    RestaurantNotFoundException.class,
+    CustomerNotFoundException.class,
+    PaymentMethodNotFoundException.class,
+    AddressNotFoundException.class,
+    MenuItemNotFoundException.class
   })
   public ResponseEntity<ErrorResponse> handleNotFoundException(
     RuntimeException ex,
@@ -57,7 +61,8 @@ public class GlobalExceptionHandler {
   @ExceptionHandler({
     OrderCancellationException.class,
     PaymentProcessingException.class,
-    InvalidOrderStateException.class
+    InvalidOrderStateException.class,
+    PaymentException.class
   })
   public ResponseEntity<ErrorResponse> handleBusinessException(
     RuntimeException ex,

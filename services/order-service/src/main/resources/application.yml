@@ -1,8 +1,8 @@
 spring:
   application:
-    name: ordering-service
+    name: order-service
   datasource:
-    url: jdbc:postgresql://localhost:5432/ordering_service
+    url: jdbc:postgresql://localhost:5432/order_service
     username: postgres
     password: postgres
     driver-class-name: org.postgresql.Driver
@@ -26,12 +26,12 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
     consumer:
-      group-id: ordering-service-group
+      group-id: order-service-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: com.doordash.ordering_service.models.events
+        spring.json.trusted.packages: com.doordash.order_service.models.events
   security:
     oauth2:
       resourceserver:
@@ -40,7 +40,7 @@ spring:
           jwk-set-uri: https://auth.doordash.com/.well-known/jwks.json
 
 server:
-  port: 8080
+  port: 8081
   servlet:
     context-path: /api/v1
 
@@ -57,6 +57,24 @@ management:
 resilience4j:
   circuitbreaker:
     instances:
+      cartService:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 5s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+      restaurantService:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 5s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
       paymentService:
         registerHealthIndicator: true
         slidingWindowSize: 10
@@ -68,6 +86,16 @@ resilience4j:
         eventConsumerBufferSize: 10
   retry:
     instances:
+      cartService:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+      restaurantService:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
       paymentService:
         maxAttempts: 3
         waitDuration: 1s
@@ -79,13 +107,15 @@ app:
     topics:
       order-placed: order-placed-topic
       order-cancelled: order-cancelled-topic
-  payment:
-    stripe:
-      api-key: ${STRIPE_API_KEY:sk_test_dummy}
-  search:
-    radius-miles: 10
+  services:
+    cart-service:
+      url: http://localhost:8082/api/v1
+    restaurant-service:
+      url: http://localhost:8083/api/v1
+    payment-service:
+      url: http://localhost:8084/api/v1
+    customer-profile-service:
+      url: http://localhost:8085/api/v1
   cache:
     ttl:
-      search: 300 # 5 minutes
-      cart: 1800 # 30 minutes
       order: 3600 # 1 hour

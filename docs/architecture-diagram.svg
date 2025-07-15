@@ -1,0 +1,133 @@
+<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="800" height="600" fill="#f8f9fa" />
+  
+  <!-- Title -->
+  <text x="400" y="40" font-family="Arial" font-size="24" text-anchor="middle" font-weight="bold">DoorDash Backend Architecture</text>
+  
+  <!-- API Gateway -->
+  <rect x="300" y="80" width="200" height="60" rx="10" ry="10" fill="#4285f4" />
+  <text x="400" y="115" font-family="Arial" font-size="16" text-anchor="middle" fill="white">API Gateway</text>
+  
+  <!-- Microservices -->
+  <rect x="50" y="200" width="150" height="50" rx="10" ry="10" fill="#34a853" />
+  <text x="125" y="230" font-family="Arial" font-size="14" text-anchor="middle" fill="white">Auth Service</text>
+  
+  <rect x="225" y="200" width="150" height="50" rx="10" ry="10" fill="#34a853" />
+  <text x="300" y="230" font-family="Arial" font-size="14" text-anchor="middle" fill="white">Restaurant Service</text>
+  
+  <rect x="400" y="200" width="150" height="50" rx="10" ry="10" fill="#34a853" />
+  <text x="475" y="230" font-family="Arial" font-size="14" text-anchor="middle" fill="white">Order Service</text>
+  
+  <rect x="575" y="200" width="150" height="50" rx="10" ry="10" fill="#34a853" />
+  <text x="650" y="230" font-family="Arial" font-size="14" text-anchor="middle" fill="white">User Service</text>
+  
+  <rect x="125" y="275" width="150" height="50" rx="10" ry="10" fill="#34a853" />
+  <text x="200" y="305" font-family="Arial" font-size="14" text-anchor="middle" fill="white">Delivery Service</text>
+  
+  <rect x="300" y="275" width="150" height="50" rx="10" ry="10" fill="#34a853" />
+  <text x="375" y="305" font-family="Arial" font-size="14" text-anchor="middle" fill="white">Payment Service</text>
+  
+  <rect x="475" y="275" width="150" height="50" rx="10" ry="10" fill="#34a853" />
+  <text x="550" y="305" font-family="Arial" font-size="14" text-anchor="middle" fill="white">Notification Service</text>
+  
+  <!-- Databases -->
+  <rect x="50" y="375" width="100" height="50" rx="10" ry="10" fill="#fbbc05" />
+  <text x="100" y="405" font-family="Arial" font-size="12" text-anchor="middle" fill="white">Auth DB</text>
+  
+  <rect x="175" y="375" width="100" height="50" rx="10" ry="10" fill="#fbbc05" />
+  <text x="225" y="405" font-family="Arial" font-size="12" text-anchor="middle" fill="white">Restaurant DB</text>
+  
+  <rect x="300" y="375" width="100" height="50" rx="10" ry="10" fill="#fbbc05" />
+  <text x="350" y="405" font-family="Arial" font-size="12" text-anchor="middle" fill="white">Order DB</text>
+  
+  <rect x="425" y="375" width="100" height="50" rx="10" ry="10" fill="#fbbc05" />
+  <text x="475" y="405" font-family="Arial" font-size="12" text-anchor="middle" fill="white">User DB</text>
+  
+  <rect x="550" y="375" width="100" height="50" rx="10" ry="10" fill="#fbbc05" />
+  <text x="600" y="405" font-family="Arial" font-size="12" text-anchor="middle" fill="white">Delivery DB</text>
+  
+  <rect x="175" y="450" width="100" height="50" rx="10" ry="10" fill="#fbbc05" />
+  <text x="225" y="480" font-family="Arial" font-size="12" text-anchor="middle" fill="white">Payment DB</text>
+  
+  <rect x="300" y="450" width="100" height="50" rx="10" ry="10" fill="#fbbc05" />
+  <text x="350" y="480" font-family="Arial" font-size="12" text-anchor="middle" fill="white">Notification DB</text>
+  
+  <!-- Redis -->
+  <rect x="425" y="450" width="100" height="50" rx="10" ry="10" fill="#ea4335" />
+  <text x="475" y="480" font-family="Arial" font-size="12" text-anchor="middle" fill="white">Redis Cache</text>
+  
+  <!-- Kafka -->
+  <rect x="550" y="450" width="100" height="50" rx="10" ry="10" fill="#ea4335" />
+  <text x="600" y="480" font-family="Arial" font-size="12" text-anchor="middle" fill="white">Kafka</text>
+  
+  <!-- Monitoring -->
+  <rect x="175" y="525" width="100" height="50" rx="10" ry="10" fill="#9c27b0" />
+  <text x="225" y="555" font-family="Arial" font-size="12" text-anchor="middle" fill="white">Prometheus</text>
+  
+  <rect x="300" y="525" width="100" height="50" rx="10" ry="10" fill="#9c27b0" />
+  <text x="350" y="555" font-family="Arial" font-size="12" text-anchor="middle" fill="white">Grafana</text>
+  
+  <rect x="425" y="525" width="100" height="50" rx="10" ry="10" fill="#9c27b0" />
+  <text x="475" y="555" font-family="Arial" font-size="12" text-anchor="middle" fill="white">Jaeger</text>
+  
+  <!-- Connections -->
+  <!-- API Gateway to Services -->
+  <line x1="400" y1="140" x2="125" y2="200" stroke="#4285f4" stroke-width="2" />
+  <line x1="400" y1="140" x2="300" y2="200" stroke="#4285f4" stroke-width="2" />
+  <line x1="400" y1="140" x2="475" y2="200" stroke="#4285f4" stroke-width="2" />
+  <line x1="400" y1="140" x2="650" y2="200" stroke="#4285f4" stroke-width="2" />
+  <line x1="400" y1="140" x2="200" y2="275" stroke="#4285f4" stroke-width="2" />
+  <line x1="400" y1="140" x2="375" y2="275" stroke="#4285f4" stroke-width="2" />
+  <line x1="400" y1="140" x2="550" y2="275" stroke="#4285f4" stroke-width="2" />
+  
+  <!-- Services to Databases -->
+  <line x1="125" y1="250" x2="100" y2="375" stroke="#34a853" stroke-width="2" />
+  <line x1="300" y1="250" x2="225" y2="375" stroke="#34a853" stroke-width="2" />
+  <line x1="475" y1="250" x2="350" y2="375" stroke="#34a853" stroke-width="2" />
+  <line x1="650" y1="250" x2="475" y2="375" stroke="#34a853" stroke-width="2" />
+  <line x1="200" y1="325" x2="600" y2="375" stroke="#34a853" stroke-width="2" />
+  <line x1="375" y1="325" x2="225" y2="450" stroke="#34a853" stroke-width="2" />
+  <line x1="550" y1="325" x2="350" y2="450" stroke="#34a853" stroke-width="2" />
+  
+  <!-- Services to Redis and Kafka -->
+  <line x1="125" y1="250" x2="475" y2="450" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  <line x1="300" y1="250" x2="475" y2="450" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  <line x1="475" y1="250" x2="475" y2="450" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  <line x1="650" y1="250" x2="475" y2="450" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  <line x1="200" y1="325" x2="475" y2="450" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  <line x1="375" y1="325" x2="475" y2="450" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  <line x1="550" y1="325" x2="475" y2="450" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  
+  <line x1="475" y1="250" x2="600" y2="450" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  <line x1="200" y1="325" x2="600" y2="450" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  <line x1="550" y1="325" x2="600" y2="450" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  
+  <!-- Services to Monitoring -->
+  <line x1="125" y1="250" x2="225" y2="525" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  <line x1="300" y1="250" x2="225" y2="525" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  <line x1="475" y1="250" x2="225" y2="525" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  <line x1="650" y1="250" x2="225" y2="525" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  <line x1="200" y1="325" x2="225" y2="525" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  <line x1="375" y1="325" x2="225" y2="525" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  <line x1="550" y1="325" x2="225" y2="525" stroke="#34a853" stroke-width="2" stroke-dasharray="5,5" />
+  
+  <line x1="225" y1="525" x2="350" y2="525" stroke="#9c27b0" stroke-width="2" />
+  <line x1="225" y1="525" x2="475" y2="525" stroke="#9c27b0" stroke-width="2" />
+  
+  <!-- Legend -->
+  <rect x="650" y="525" width="20" height="10" fill="#4285f4" />
+  <text x="675" y="535" font-family="Arial" font-size="10" text-anchor="start">Gateway</text>
+  
+  <rect x="650" y="545" width="20" height="10" fill="#34a853" />
+  <text x="675" y="555" font-family="Arial" font-size="10" text-anchor="start">Services</text>
+  
+  <rect x="650" y="565" width="20" height="10" fill="#fbbc05" />
+  <text x="675" y="575" font-family="Arial" font-size="10" text-anchor="start">Databases</text>
+  
+  <rect x="650" y="585" width="20" height="10" fill="#ea4335" />
+  <text x="675" y="595" font-family="Arial" font-size="10" text-anchor="start">Infrastructure</text>
+  
+  <rect x="725" y="525" width="20" height="10" fill="#9c27b0" />
+  <text x="750" y="535" font-family="Arial" font-size="10" text-anchor="start">Monitoring</text>
+</svg>
