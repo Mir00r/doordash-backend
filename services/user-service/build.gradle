@@ -6,6 +6,8 @@ plugins {
     id 'org.jetbrains.kotlin.jvm' version '1.9.20'
     id 'org.jetbrains.kotlin.plugin.spring' version '1.9.20'
     id 'org.jetbrains.kotlin.plugin.jpa' version '1.9.20'
+    id 'jacoco'
+    id 'org.springframework.cloud.contract' version '4.1.0'
 }
 
 group = 'com.doordash'
@@ -84,16 +86,67 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
     
-    // Testing
+    // Testing Dependencies
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
+    
+    // Testcontainers for Integration Testing
     testImplementation 'org.testcontainers:junit-jupiter'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:kafka'
+    testImplementation 'org.testcontainers:redis'
+    testImplementation 'org.testcontainers:localstack'
+    testImplementation 'org.testcontainers:elasticsearch'
+    testImplementation 'org.testcontainers:mockserver'
+    
+    // Contract Testing with Spring Cloud Contract
+    testImplementation 'org.springframework.cloud:spring-cloud-starter-contract-verifier'
+    testImplementation 'org.springframework.cloud:spring-cloud-contract-wiremock'
+    testImplementation 'org.springframework.cloud:spring-cloud-starter-contract-stub-runner'
+    
+    // Enhanced Testing Libraries
+    testImplementation 'io.rest-assured:rest-assured:5.3.2'
+    testImplementation 'io.rest-assured:spring-mock-mvc:5.3.2'
+    testImplementation 'io.rest-assured:json-schema-validator:5.3.2'
+    testImplementation 'com.github.tomakehurst:wiremock-jre8:2.35.0'
+    
+    // Test Database
     testImplementation 'com.h2database:h2'
+    testRuntimeOnly 'com.h2database:h2'
+    
+    // Mocking and Assertions
     testImplementation 'org.mockito:mockito-core'
     testImplementation 'org.mockito:mockito-junit-jupiter'
+    testImplementation 'org.mockito:mockito-inline'
+    testImplementation 'org.assertj:assertj-core'
+    testImplementation 'org.awaitility:awaitility:4.2.0'
+    
+    // JSON Testing and Schema Validation
+    testImplementation 'com.jayway.jsonpath:json-path'
+    testImplementation 'org.skyscreamer:jsonassert'
+    testImplementation 'com.github.java-json-tools:json-schema-validator:2.2.14'
+    
+    // Performance Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-webflux'
+    testImplementation 'io.gatling.highcharts:gatling-charts-highcharts:3.9.5'
+    testImplementation 'io.gatling:gatling-test-framework:3.9.5'
+    
+    // Security Testing
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'com.unboundid:unboundid-ldapsdk:6.0.11'
+    
+    // Test Configuration and Utils
+    testImplementation 'org.springframework.boot:spring-boot-test-autoconfigure'
+    testImplementation 'net.datafaker:datafaker:2.0.2'
+    testImplementation 'uk.co.jemos.podam:podam:8.0.1.RELEASE'
+    
+    // Database Testing
+    testImplementation 'com.github.database-rider:rider-spring:1.41.0'
+    testImplementation 'org.dbunit:dbunit:2.7.3'
+    
+    // Chaos Engineering for Testing
+    testImplementation 'de.codecentric:chaos-monkey-spring-boot:3.1.0'
     
     // Development tools
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
@@ -116,4 +169,465 @@ flyway {
     password = System.getenv('DB_PASSWORD') ?: 'postgres'
     locations = ['classpath:db/migration']
     cleanDisabled = false
+}
+
+// Test Configuration
+test {
+    useJUnitPlatform()
+    
+    // Test execution configuration
+    maxParallelForks = Runtime.runtime.availableProcessors().intdiv(2) ?: 1
+    forkEvery = 100
+    
+    // JVM arguments for tests
+    jvmArgs = [
+        '-Xmx3g',
+        '-XX:+UseG1GC',
+        '-XX:MaxGCPauseMillis=100',
+        '-XX:+UnlockExperimentalVMOptions',
+        '-XX:+UseJVMCICompiler',
+        '--add-opens=java.base/java.lang=ALL-UNNAMED',
+        '--add-opens=java.base/java.util=ALL-UNNAMED',
+        '--add-opens=java.base/java.time=ALL-UNNAMED'
+    ]
+    
+    // System properties for tests
+    systemProperties = [
+        'spring.profiles.active': 'test',
+        'testcontainers.reuse.enable': 'true',
+        'testcontainers.ryuk.disabled': 'false',
+        'junit.jupiter.execution.parallel.enabled': 'true',
+        'junit.jupiter.execution.parallel.mode.default': 'concurrent',
+        'junit.jupiter.execution.parallel.mode.classes.default': 'concurrent',
+        'junit.jupiter.execution.parallel.config.strategy': 'dynamic',
+        'junit.jupiter.execution.parallel.config.dynamic.factor': '2',
+        'user.timezone': 'UTC'
+    ]
+    
+    // Test filtering
+    useJUnitPlatform {
+        excludeTags 'performance', 'slow', 'manual', 'integration', 'e2e', 'contract'
+        
+        // Include specific categories based on build type
+        if (project.hasProperty('includeSlowTests')) {
+            includeTags 'slow'
+        }
+    }
+    
+    // Test reporting
+    testLogging {
+        events 'passed', 'skipped', 'failed', 'standardOut', 'standardError'
+        exceptionFormat 'full'
+        showExceptions = true
+        showCauses = true
+        showStackTraces = true
+        displayGranularity = 0
+        
+        info {
+            events 'passed', 'skipped', 'failed'
+        }
+        
+        debug {
+            events 'started', 'passed', 'skipped', 'failed'
+        }
+    }
+    
+    // Fail fast on first test failure in CI
+    if (System.getenv('CI') == 'true') {
+        failFast = true
+        testLogging.showStandardStreams = false
+    }
+    
+    outputs.upToDateWhen { false } // Always run tests
+    finalizedBy 'jacocoTestReport'
+}
+
+// Unit Tests Task (default test task excludes integration tests)
+task unitTest(type: Test) {
+    description = 'Runs unit tests only'
+    group = 'verification'
+    
+    useJUnitPlatform {
+        excludeTags 'integration', 'e2e', 'contract', 'performance', 'slow'
+        includeTags 'unit'
+    }
+    
+    systemProperty 'spring.profiles.active', 'test'
+    
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        showStandardStreams = false
+    }
+}
+
+// Integration Tests Task  
+task integrationTest(type: Test) {
+    description = 'Runs integration tests'
+    group = 'verification'
+    
+    useJUnitPlatform {
+        includeTags 'integration'
+        excludeTags 'performance', 'e2e', 'slow'
+    }
+    
+    systemProperty 'spring.profiles.active', 'integration-test'
+    
+    // Ensure Testcontainers have enough time to start
+    timeout = Duration.ofMinutes(15)
+    maxParallelForks = 1 // Sequential execution for integration tests
+    
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        showStandardStreams = true
+    }
+}
+
+// Contract Tests Task
+task contractTest(type: Test) {
+    description = 'Runs contract tests'
+    group = 'verification'
+    
+    useJUnitPlatform {
+        includeTags 'contract'
+        excludeTags 'performance', 'e2e', 'slow'
+    }
+    
+    systemProperty 'spring.profiles.active', 'contract-test'
+    timeout = Duration.ofMinutes(10)
+    
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        showStandardStreams = true
+    }
+}
+
+// E2E Tests Task
+task e2eTest(type: Test) {
+    description = 'Runs end-to-end tests'
+    group = 'verification'
+    
+    useJUnitPlatform {
+        includeTags 'e2e'
+        excludeTags 'performance'
+    }
+    
+    systemProperty 'spring.profiles.active', 'e2e-test'
+    timeout = Duration.ofMinutes(20)
+    maxParallelForks = 1 // Sequential execution for E2E tests
+    
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        showStandardStreams = true
+    }
+}
+
+// Performance Tests Task
+task performanceTest(type: Test) {
+    description = 'Runs performance tests'
+    group = 'verification'
+    
+    useJUnitPlatform {
+        includeTags 'performance'
+    }
+    
+    // Performance test specific configuration
+    maxParallelForks = 1 // Run performance tests sequentially
+    systemProperty 'spring.profiles.active', 'performance-test'
+    timeout = Duration.ofMinutes(30)
+    
+    jvmArgs = [
+        '-Xmx4g',
+        '-XX:+UseG1GC',
+        '-XX:MaxGCPauseMillis=200',
+        '-XX:+UnlockExperimentalVMOptions',
+        '-XX:+UseJVMCICompiler'
+    ]
+    
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        showStandardStreams = true
+    }
+}
+
+// Security Tests Task
+task securityTest(type: Test) {
+    description = 'Runs security-focused tests'
+    group = 'verification'
+    
+    useJUnitPlatform {
+        includeTags 'security'
+    }
+    
+    systemProperty 'spring.profiles.active', 'security-test'
+    
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        showStandardStreams = true
+    }
+}
+
+// Smoke Tests Task
+task smokeTest(type: Test) {
+    description = 'Runs smoke tests for quick validation'
+    group = 'verification'
+    
+    useJUnitPlatform {
+        includeTags 'smoke'
+    }
+    
+    systemProperty 'spring.profiles.active', 'smoke-test'
+    
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        showStandardStreams = false
+    }
+}
+
+// All Tests Task
+task allTests {
+    description = 'Runs all types of tests'
+    group = 'verification'
+    
+    dependsOn 'unitTest', 'integrationTest', 'contractTest', 'e2eTest'
+    
+    tasks.findByName('unitTest').mustRunAfter 'clean'
+    tasks.findByName('integrationTest').mustRunAfter 'unitTest'
+    tasks.findByName('contractTest').mustRunAfter 'integrationTest'
+    tasks.findByName('e2eTest').mustRunAfter 'contractTest'
+}
+
+// Quick Tests Task (for development)
+task quickTest {
+    description = 'Runs quick tests for development feedback'
+    group = 'verification'
+    
+    dependsOn 'unitTest', 'smokeTest'
+}
+
+// Jacoco Configuration for Code Coverage
+jacoco {
+    toolVersion = "0.8.11"
+    reportsDirectory = layout.buildDirectory.dir('jacoco')
+}
+
+jacocoTestReport {
+    dependsOn test, integrationTest
+    
+    executionData fileTree(layout.buildDirectory.dir('jacoco')).include("**/*.exec")
+    
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = true
+        
+        xml.outputLocation = layout.buildDirectory.file('jacoco/jacocoTestReport.xml')
+        html.outputLocation = layout.buildDirectory.dir('jacoco/html')
+        csv.outputLocation = layout.buildDirectory.file('jacoco/jacocoTestReport.csv')
+    }
+    
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                '**/config/**',
+                '**/dto/**',
+                '**/dtos/**',
+                '**/entity/**',
+                '**/entities/**',
+                '**/enums/**',
+                '**/exceptions/**',
+                '**/mappers/**',
+                '**/*Application.*',
+                '**/*Config.*',
+                '**/*Configuration.*',
+                '**/*Properties.*',
+                '**/*Constants.*',
+                '**/*Dto.*',
+                '**/*Entity.*',
+                '**/*Request.*',
+                '**/*Response.*',
+                '**/*Event.*'
+            ])
+        }))
+    }
+    
+    finalizedBy jacocoTestCoverageVerification
+}
+
+jacocoTestCoverageVerification {
+    dependsOn 'jacocoTestReport'
+    
+    violationRules {
+        rule {
+            limit {
+                counter = 'INSTRUCTION'
+                value = 'COVEREDRATIO'
+                minimum = 0.85 // 85% instruction coverage minimum
+            }
+        }
+        
+        rule {
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.75 // 75% branch coverage minimum
+            }
+        }
+        
+        rule {
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.80 // 80% line coverage minimum
+            }
+        }
+        
+        rule {
+            limit {
+                counter = 'CLASS'
+                value = 'MISSEDCOUNT'
+                maximum = 3 // Maximum 3 classes can be uncovered
+            }
+        }
+        
+        rule {
+            limit {
+                counter = 'METHOD'
+                value = 'MISSEDCOUNT'
+                maximum = 10 // Maximum 10 methods can be uncovered
+            }
+        }
+    }
+}
+
+// Integration Test Coverage Task
+task jacocoIntegrationTestReport(type: JacocoReport) {
+    dependsOn 'integrationTest'
+    
+    sourceSets sourceSets.main
+    executionData 'integrationTest'
+    
+    reports {
+        xml.required = true
+        html.required = true
+        html.outputLocation = layout.buildDirectory.dir('jacoco/integration')
+    }
+}
+
+// Combined Coverage Report
+task jacocoCombinedTestReport(type: JacocoReport) {
+    dependsOn 'test', 'integrationTest'
+    
+    sourceSets sourceSets.main
+    executionData fileTree(layout.buildDirectory.dir('jacoco')).include("**/*.exec")
+    
+    reports {
+        xml.required = true
+        html.required = true
+        html.outputLocation = layout.buildDirectory.dir('jacoco/combined')
+    }
+    
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                '**/config/**',
+                '**/dto/**',
+                '**/dtos/**',
+                '**/entity/**',
+                '**/entities/**',
+                '**/enums/**',
+                '**/exceptions/**',
+                '**/mappers/**',
+                '**/*Application.*',
+                '**/*Config.*',
+                '**/*Configuration.*',
+                '**/*Properties.*',
+                '**/*Constants.*',
+                '**/*Dto.*',
+                '**/*Entity.*',
+                '**/*Request.*',
+                '**/*Response.*',
+                '**/*Event.*'
+            ])
+        }))
+    }
+}
+
+// Custom task to run tests with coverage
+task testWithCoverage {
+    description = 'Runs tests and generates coverage report'
+    group = 'verification'
+    
+    dependsOn 'test', 'jacocoTestReport', 'jacocoTestCoverageVerification'
+}
+
+// Contract testing configuration
+contracts {
+    testFramework = 'JUNIT5'
+    testMode = 'EXPLICIT'
+    baseClassForTests = 'com.doordash.user_service.contract.EnhancedUserServiceContractTestBase'
+    contractsDslDir = file('src/test/resources/contracts')
+    generatedTestSourcesDir = file('src/contractTest/java')
+    
+    // Package with generated contracts
+    packageWithBaseClasses = 'com.doordash.user_service.contract'
+    
+    // Contract repository configuration for sharing contracts
+    contractRepository {
+        repositoryUrl = "https://nexus.doordash.com/repository/contracts/"
+        username = project.findProperty('contracts.username') ?: System.getenv('CONTRACTS_USERNAME')
+        password = project.findProperty('contracts.password') ?: System.getenv('CONTRACTS_PASSWORD')
+    }
+    
+    // Publish stubs configuration
+    publishStubsToScm {
+        contractsMode = "REMOTE"
+        customizationConfiguration = {
+            gitCommitMessage = "Updated user-service contracts [skip ci]"
+        }
+    }
+}
+
+// Generate contract tests task
+generateContractTests {
+    doFirst {
+        println "Generating contract tests from: ${contracts.contractsDslDir}"
+    }
+}
+
+// Contract test execution task
+contractTest {
+    dependsOn generateContractTests
+    useJUnitPlatform {
+        includeTags 'contract'
+    }
+}
+
+// Publish stubs task
+publishStubsToScm {
+    dependsOn contractTest
+}
+
+// Stub runner configuration for consumer testing
+stubRunnerStubs {
+    repositoryRoot = "https://nexus.doordash.com/repository/contracts/"
+    ids = [
+        'com.doordash:auth-service:+:stubs:8080',
+        'com.doordash:notification-service:+:stubs:8081'
+    ]
+    stubsMode = 'REMOTE'
+}
+
+// Checkstyle configuration for test code quality
+checkstyleTest {
+    configFile = file('config/checkstyle/checkstyle-test.xml')
+}
+
+// SpotBugs configuration for test code
+spotbugsTest {
+    effort = 'max'
+    reportLevel = 'medium'
+    reports {
+        xml.required = false
+        html.required = true
+    }
 }

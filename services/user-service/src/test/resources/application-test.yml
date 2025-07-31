@@ -1,0 +1,139 @@
+# Test Configuration for User Service
+# This configuration is used for unit and integration tests
+
+spring:
+  application:
+    name: user-service-test
+  
+  # Test Database Configuration
+  datasource:
+    # H2 in-memory database for fast unit tests
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: test
+    password: test
+  
+  # JPA Configuration for tests
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.H2Dialect
+  
+  # Cache Configuration (use simple cache for tests)
+  cache:
+    type: simple
+  
+  # Security Configuration for tests
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080
+          jwk-set-uri: http://localhost:8080/auth/realms/doordash/protocol/openid_connect/certs
+  
+  # Kafka Configuration (disabled for unit tests)
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: user-service-test
+      auto-offset-reset: earliest
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+  
+  # Redis Configuration (embedded for tests)
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 1000ms
+  
+  # Mail Configuration (mock for tests)
+  mail:
+    host: localhost
+    port: 1025
+    username: test
+    password: test
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+# Application Configuration
+app:
+  # File Storage Configuration (disabled for tests)
+  file-storage:
+    enabled: false
+    type: local
+    local:
+      base-path: /tmp/test-uploads
+  
+  # Service Communication (mock for tests)
+  auth-service:
+    enabled: false
+    base-url: http://localhost:8080
+  
+  notification-service:
+    enabled: false
+    base-url: http://localhost:8087
+  
+  # JWT Configuration for tests
+  security:
+    jwt:
+      public-key: test-public-key
+      issuer: test-issuer
+  
+  # User Configuration
+  user:
+    profile:
+      default-avatar: /images/default-avatar.png
+      max-file-size: 5MB
+    password:
+      min-length: 8
+      require-uppercase: true
+      require-lowercase: true
+      require-numbers: true
+      require-special-chars: false
+
+# Logging Configuration
+logging:
+  level:
+    com.doordash.user_service: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.kafka: WARN
+    org.testcontainers: INFO
+    org.hibernate: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+# Management Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: false
+
+# Test-specific Configuration
+test:
+  containers:
+    reuse: true
+  parallel:
+    enabled: true
+    max-threads: 4
+  timeout:
+    default: 30s
+    slow: 60s
+    performance: 300s
