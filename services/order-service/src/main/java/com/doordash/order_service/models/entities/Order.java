@@ -1,8 +1,10 @@
 package com.doordash.order_service.models.entities;
 
+import com.doordash.order_service.enums.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -35,7 +37,7 @@ public class Order {
     private OrderStatus status;
 
     @Column(name = "total_amount", nullable = false)
-    private Double totalAmount;
+    private BigDecimal totalAmount;
 
     @Embedded
     private OrderItems items;

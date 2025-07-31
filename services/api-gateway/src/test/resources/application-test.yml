@@ -1,0 +1,138 @@
+server:
+  port: 0
+
+spring:
+  application:
+    name: api-gateway-test
+  
+  main:
+    web-application-type: reactive
+  
+  cloud:
+    gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+      routes:
+        # Test routes for integration testing
+        - id: test-health
+          uri: http://httpbin.org
+          predicates:
+            - Path=/test/health
+          filters:
+            - SetPath=/status/200
+
+        - id: test-auth
+          uri: http://httpbin.org
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - SetPath=/status/401
+
+        - id: test-protected
+          uri: http://httpbin.org
+          predicates:
+            - Path=/api/v1/users/**
+          filters:
+            - JwtAuthentication
+            - SetPath=/status/200
+      
+      httpclient:
+        connect-timeout: 1000
+        response-timeout: 5s
+    
+    consul:
+      discovery:
+        enabled: false
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/auth/realms/doordash
+          jwk-set-uri: http://localhost:8080/auth/realms/doordash/protocol/openid_connect/certs
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 1000ms
+      lettuce:
+        pool:
+          max-active: 5
+          max-idle: 2
+          min-idle: 1
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+# Test Configuration
+gateway:
+  cors:
+    allowed-origins: http://localhost:3000
+    allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+    allowed-headers: "*"
+    allow-credentials: true
+    max-age: 3600
+  
+  rate-limiting:
+    enabled: false
+    default-requests-per-minute: 1000
+  
+  security:
+    jwt:
+      header: Authorization
+      prefix: "Bearer "
+    public-paths:
+      - /actuator/**
+      - /api-docs/**
+      - /test/**
+      - /api/v1/auth/**
+      - /api/v1/restaurants/search
+  
+  logging:
+    enabled: true
+    log-request-body: false
+    log-response-body: false
+    log-headers: false
+  
+  api-docs:
+    enabled: true
+    services:
+      - auth-service
+      - user-service
+      - restaurant-service
+
+# Resilience4j Test Configuration
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        sliding-window-size: 5
+        minimum-number-of-calls: 3
+    instances:
+      test-service:
+        base-config: default
+
+# Logging Configuration
+logging:
+  level:
+    com.doordash.api_gateway: DEBUG
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.security: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+
+# Management endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,circuitbreakers
+  endpoint:
+    health:
+      show-details: always

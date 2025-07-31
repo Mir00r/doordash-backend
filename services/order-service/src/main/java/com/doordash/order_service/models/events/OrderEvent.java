@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -22,7 +23,7 @@ public class OrderEvent {
     private String restaurantName;
     private Instant orderTime;
     private Order.OrderStatus status;
-    private Double totalAmount;
+    private BigDecimal totalAmount;
     private List<OrderItem> items;
     private String eventType; // "ORDER_PLACED", "ORDER_CANCELLED", etc.
     private Instant timestamp;
@@ -35,6 +36,6 @@ public class OrderEvent {
         private UUID menuItemId;
         private String name;
         private int quantity;
-        private Double price;
+        private BigDecimal price;
     }
 }

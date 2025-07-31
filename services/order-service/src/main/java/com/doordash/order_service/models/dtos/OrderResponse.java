@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -22,7 +23,7 @@ public class OrderResponse {
     private UUID dasherId;
     private Instant orderTime;
     private String status;
-    private Double totalAmount;
+    private BigDecimal totalAmount;
     private List<OrderItemResponse> items;
     private String paymentStatus;
 }

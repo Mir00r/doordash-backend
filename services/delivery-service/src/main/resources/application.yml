@@ -1,0 +1,369 @@
+spring:
+  application:
+    name: delivery-service
+  
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  
+  # Database Configuration
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/delivery_db}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 25
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-timeout: 20000
+      leak-detection-threshold: 60000
+  
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.spatial.dialect.postgis.PostgisPG95Dialect
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          batch_size: 25
+          order_inserts: true
+          order_updates: true
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+  
+  # Flyway Configuration
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+    schemas: public
+  
+  # Redis Configuration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3000ms
+      database: 3
+      lettuce:
+        pool:
+          max-active: 10
+          max-idle: 8
+          min-idle: 2
+          max-wait: 2000ms
+  
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 1
+    consumer:
+      group-id: delivery-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      properties:
+        spring.json.trusted.packages: "com.doordash.delivery_service.domain.events,com.doordash.common.events"
+  
+  # Cache Configuration
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000
+      cache-null-values: false
+  
+  # Jackson Configuration
+  jackson:
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+  
+  # WebSocket Configuration
+  websocket:
+    allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://localhost:3000,https://app.doordash.com}
+  
+  # File Upload Configuration
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 50MB
+
+# Server Configuration
+server:
+  port: ${SERVER_PORT:8084}
+  servlet:
+    context-path: /
+  compression:
+    enabled: true
+  http2:
+    enabled: true
+  forward-headers-strategy: framework
+
+# Management and Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,loggers,env
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    metrics:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    web:
+      server:
+        request:
+          autotime:
+            enabled: true
+
+# Application Configuration
+app:
+  # Security Configuration
+  security:
+    jwt:
+      secret: ${JWT_SECRET:defaultSecretKeyForDevelopmentOnlyNotForProduction123456789}
+      expiration: 86400000 # 24 hours
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001,https://app.doordash.com,https://admin.doordash.com}
+      allowed-methods: ${CORS_ALLOWED_METHODS:GET,POST,PUT,PATCH,DELETE,OPTIONS}
+      allowed-headers: ${CORS_ALLOWED_HEADERS:Authorization,Content-Type,X-Requested-With,Accept,Origin,Cache-Control,Content-Range,X-File-Name}
+      allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
+  
+  # External Service URLs
+  services:
+    auth-service:
+      url: ${AUTH_SERVICE_URL:http://localhost:8081}
+      endpoints:
+        validate-token: /api/v1/auth/validate
+    user-service:
+      url: ${USER_SERVICE_URL:http://localhost:8083}
+      endpoints:
+        profile: /api/v1/users/profiles
+    order-service:
+      url: ${ORDER_SERVICE_URL:http://localhost:8082}
+      endpoints:
+        orders: /api/v1/orders
+    restaurant-service:
+      url: ${RESTAURANT_SERVICE_URL:http://localhost:8085}
+      endpoints:
+        restaurants: /api/v1/restaurants
+  
+  # Google Maps Configuration
+  google:
+    maps:
+      api-key: ${GOOGLE_MAPS_API_KEY:your_api_key_here}
+      geocoding:
+        enabled: ${GOOGLE_MAPS_GEOCODING_ENABLED:true}
+        timeout: 5000ms
+      routing:
+        enabled: ${GOOGLE_MAPS_ROUTING_ENABLED:true}
+        timeout: 10000ms
+        mode: driving
+      distance-matrix:
+        enabled: ${GOOGLE_MAPS_DISTANCE_MATRIX_ENABLED:true}
+        timeout: 8000ms
+  
+  # AWS Configuration
+  aws:
+    region: ${AWS_REGION:us-west-2}
+    s3:
+      bucket: ${AWS_S3_BUCKET:doordash-delivery-service}
+      prefix: ${AWS_S3_PREFIX:delivery/}
+    credentials:
+      access-key: ${AWS_ACCESS_KEY_ID:}
+      secret-key: ${AWS_SECRET_ACCESS_KEY:}
+  
+  # Delivery Configuration
+  delivery:
+    # Default delivery settings
+    default-radius-miles: ${DELIVERY_DEFAULT_RADIUS:10}
+    max-radius-miles: ${DELIVERY_MAX_RADIUS:25}
+    estimated-prep-time-minutes: ${DELIVERY_ESTIMATED_PREP_TIME:15}
+    
+    # Driver settings
+    driver:
+      max-active-deliveries: ${DRIVER_MAX_ACTIVE_DELIVERIES:3}
+      location-update-interval-seconds: ${DRIVER_LOCATION_UPDATE_INTERVAL:30}
+      idle-timeout-minutes: ${DRIVER_IDLE_TIMEOUT:15}
+      max-distance-from-delivery-miles: ${DRIVER_MAX_DISTANCE_FROM_DELIVERY:0.5}
+    
+    # Route optimization
+    route:
+      optimization-enabled: ${ROUTE_OPTIMIZATION_ENABLED:true}
+      max-stops-per-route: ${ROUTE_MAX_STOPS:5}
+      reoptimize-interval-minutes: ${ROUTE_REOPTIMIZE_INTERVAL:10}
+    
+    # Tracking settings
+    tracking:
+      update-interval-seconds: ${TRACKING_UPDATE_INTERVAL:15}
+      location-accuracy-meters: ${TRACKING_LOCATION_ACCURACY:50}
+      eta-buffer-minutes: ${TRACKING_ETA_BUFFER:5}
+    
+    # Pricing configuration
+    pricing:
+      base-fee: ${DELIVERY_BASE_FEE:2.99}
+      per-mile-fee: ${DELIVERY_PER_MILE_FEE:0.99}
+      surge-multiplier-max: ${DELIVERY_SURGE_MAX:3.0}
+      peak-hours-enabled: ${DELIVERY_PEAK_HOURS_ENABLED:true}
+  
+  # Notification Configuration
+  notifications:
+    enabled: ${NOTIFICATIONS_ENABLED:true}
+    sms:
+      enabled: ${SMS_NOTIFICATIONS_ENABLED:true}
+      provider: ${SMS_PROVIDER:twilio}
+    push:
+      enabled: ${PUSH_NOTIFICATIONS_ENABLED:true}
+      provider: ${PUSH_PROVIDER:firebase}
+    email:
+      enabled: ${EMAIL_NOTIFICATIONS_ENABLED:true}
+      from: ${EMAIL_FROM:noreply@doordash.com}
+  
+  # Feature Flags
+  features:
+    real-time-tracking: ${FEATURE_REAL_TIME_TRACKING:true}
+    route-optimization: ${FEATURE_ROUTE_OPTIMIZATION:true}
+    driver-ratings: ${FEATURE_DRIVER_RATINGS:true}
+    delivery-zones: ${FEATURE_DELIVERY_ZONES:true}
+    surge-pricing: ${FEATURE_SURGE_PRICING:true}
+    batch-deliveries: ${FEATURE_BATCH_DELIVERIES:true}
+    predictive-eta: ${FEATURE_PREDICTIVE_ETA:true}
+
+# Logging Configuration
+logging:
+  level:
+    com.doordash.delivery_service: ${LOG_LEVEL:INFO}
+    org.springframework.security: ${SECURITY_LOG_LEVEL:WARN}
+    org.springframework.web: ${WEB_LOG_LEVEL:INFO}
+    org.springframework.kafka: ${KAFKA_LOG_LEVEL:INFO}
+    com.google.maps: ${MAPS_LOG_LEVEL:INFO}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{correlationId}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{correlationId}] %logger{36} - %msg%n"
+  file:
+    name: ${LOG_FILE:logs/delivery-service.log}
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      google-maps:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 5
+      external-services:
+        sliding-window-size: 20
+        failure-rate-threshold: 60
+        wait-duration-in-open-state: 60s
+  retry:
+    instances:
+      google-maps:
+        max-attempts: 3
+        wait-duration: 1s
+        exponential-backoff-multiplier: 2
+      external-services:
+        max-attempts: 2
+        wait-duration: 500ms
+  timeout:
+    instances:
+      google-maps:
+        timeout-duration: 10s
+      external-services:
+        timeout-duration: 5s
+
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:postgresql://localhost:5432/delivery_db_dev
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: validate
+
+app:
+  google:
+    maps:
+      api-key: development_api_key
+
+logging:
+  level:
+    com.doordash.delivery_service: DEBUG
+
+---
+# Test Profile
+spring:
+  config:
+    activate:
+      on-profile: test
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false
+
+app:
+  google:
+    maps:
+      api-key: test_api_key
+      geocoding:
+        enabled: false
+      routing:
+        enabled: false
+
+---
+# Docker Profile
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: jdbc:postgresql://postgres:5432/delivery_db
+  data:
+    redis:
+      host: redis
+  kafka:
+    bootstrap-servers: kafka:9092
+
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: prod
+  jpa:
+    show-sql: false
+  
+logging:
+  level:
+    com.doordash.delivery_service: INFO
+    org.springframework.security: WARN

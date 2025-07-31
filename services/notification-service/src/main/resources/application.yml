@@ -1,0 +1,208 @@
+server:
+  port: 8087
+  servlet:
+    context-path: /api/v1
+
+spring:
+  application:
+    name: notification-service
+  
+  datasource:
+    url: jdbc:postgresql://localhost:5432/notification_db
+    username: ${DB_USERNAME:notification_user}
+    password: ${DB_PASSWORD:notification_pass}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      connection-timeout: 20000
+      validation-timeout: 5000
+  
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        show_sql: false
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+    show-sql: false
+  
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true
+  
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+  
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: notification-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.doordash.notification_service.dto"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+  
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/auth/realms/doordash}
+
+# Notification Service Configuration
+notification:
+  providers:
+    email:
+      sendgrid:
+        enabled: ${SENDGRID_ENABLED:true}
+        api-key: ${SENDGRID_API_KEY:your-sendgrid-api-key}
+        from-email: ${SENDGRID_FROM_EMAIL:noreply@doordash.com}
+        from-name: ${SENDGRID_FROM_NAME:DoorDash}
+      smtp:
+        enabled: ${SMTP_ENABLED:false}
+        host: ${SMTP_HOST:smtp.gmail.com}
+        port: ${SMTP_PORT:587}
+        username: ${SMTP_USERNAME:}
+        password: ${SMTP_PASSWORD:}
+        tls: ${SMTP_TLS:true}
+    sms:
+      twilio:
+        enabled: ${TWILIO_ENABLED:true}
+        account-sid: ${TWILIO_ACCOUNT_SID:your-twilio-account-sid}
+        auth-token: ${TWILIO_AUTH_TOKEN:your-twilio-auth-token}
+        from-number: ${TWILIO_FROM_NUMBER:+1234567890}
+    push:
+      fcm:
+        enabled: ${FCM_ENABLED:true}
+        service-account-key: ${FCM_SERVICE_ACCOUNT_KEY:path/to/service-account-key.json}
+        project-id: ${FCM_PROJECT_ID:your-firebase-project-id}
+  
+  rate-limiting:
+    enabled: true
+    default-rate: 100
+    default-window: 3600
+    email:
+      rate: 50
+      window: 3600
+    sms:
+      rate: 20
+      window: 3600
+    push:
+      rate: 200
+      window: 3600
+  
+  retry:
+    max-attempts: 3
+    backoff-delay: 1000
+    max-delay: 10000
+  
+  template:
+    cache-enabled: true
+    cache-duration: 3600
+  
+  websocket:
+    enabled: true
+    allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}
+    heartbeat-interval: 30000
+
+# Management and Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.95,0.99
+
+# Logging Configuration
+logging:
+  level:
+    com.doordash.notification_service: DEBUG
+    org.springframework.kafka: INFO
+    org.springframework.web.socket: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# OpenAPI Documentation
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+  info:
+    title: Notification Service API
+    description: Comprehensive notification management service
+    version: 1.0.0
+    contact:
+      name: DoorDash Engineering
+      email: engineering@doordash.com
+
+# Circuit Breaker Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      email-provider:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        sliding-window-size: 10
+      sms-provider:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        sliding-window-size: 10
+      push-provider:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        sliding-window-size: 10
+  
+  retry:
+    instances:
+      notification-retry:
+        max-attempts: 3
+        wait-duration: 1s
+        exponential-backoff-multiplier: 2
+
+# Kafka Topics Configuration
+kafka:
+  topics:
+    order-events: order-events
+    user-events: user-events
+    delivery-events: delivery-events
+    payment-events: payment-events
+    notification-events: notification-events
+    notification-dlq: notification-dlq

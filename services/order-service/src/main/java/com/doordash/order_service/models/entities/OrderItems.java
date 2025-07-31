@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -25,12 +26,12 @@ public class OrderItems {
         private UUID menuItemId;
         private String name;
         private int quantity;
-        private Double price;
+        private BigDecimal price;
     }
 
-    public double calculateTotal() {
-        return items.stream()
-                .mapToDouble(item -> item.getPrice() * item.getQuantity())
-                .sum();
-    }
+//    public double calculateTotal() {
+//        return items.stream()
+//                .mapToDouble(item -> item.getPrice() * item.getQuantity())
+//                .sum();
+//    }
 }

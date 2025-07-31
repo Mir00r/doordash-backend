@@ -1,5 +1,6 @@
 package com.doordash.order_service.clients;
 
+import com.doordash.order_service.models.dtos.PaymentRequest;
 import com.doordash.order_service.models.dtos.PaymentResponse;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;

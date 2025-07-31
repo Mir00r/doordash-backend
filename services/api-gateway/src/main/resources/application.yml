@@ -1,0 +1,475 @@
+server:
+  port: 8080
+  netty:
+    connection-timeout: 10s
+    idle-timeout: 60s
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+
+spring:
+  application:
+    name: api-gateway
+  
+  main:
+    web-application-type: reactive
+  
+  cloud:
+    gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+        - ApiVersioning
+        - RequestResponseLogging
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenish-rate: 100
+            redis-rate-limiter.burst-capacity: 200
+            redis-rate-limiter.requested-tokens: 1
+            key-resolver: "#{@userKeyResolver}"
+        - name: Retry
+          args:
+            retries: 3
+            statuses: BAD_GATEWAY,SERVICE_UNAVAILABLE
+            methods: GET,POST,PUT,DELETE
+            backoff:
+              firstBackoff: 50ms
+              maxBackoff: 500ms
+              factor: 2
+              basedOnPreviousValue: false
+        - name: CircuitBreaker
+          args:
+            name: default-circuit-breaker
+      routes:
+        # Auth Service Routes
+        - id: auth-service-public
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/v1/auth/login,/api/v1/auth/register,/api/v1/auth/refresh,/api/v1/auth/verify
+            - Method=POST
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenish-rate: 20
+                redis-rate-limiter.burst-capacity: 40
+                key-resolver: "#{@ipKeyResolver}"
+        
+        - id: auth-service
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - JwtAuthentication
+            - AddRequestHeader=X-Service-Name, api-gateway
+        
+        # User Service Routes
+        - id: user-service-public
+          uri: lb://user-service
+          predicates:
+            - Path=/api/v1/users/register,/api/v1/users/verify-email
+            - Method=POST
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenish-rate: 10
+                redis-rate-limiter.burst-capacity: 20
+                key-resolver: "#{@ipKeyResolver}"
+        
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/v1/users/**
+          filters:
+            - JwtAuthentication
+            - AddRequestHeader=X-Service-Name, api-gateway
+        
+        # Restaurant Service Routes
+        - id: restaurant-service-public
+          uri: lb://restaurant-service
+          predicates:
+            - Path=/api/v1/restaurants/search,/api/v1/restaurants/{id},/api/v1/restaurants/{id}/menu
+            - Method=GET
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenish-rate: 50
+                redis-rate-limiter.burst-capacity: 100
+                key-resolver: "#{@ipKeyResolver}"
+        
+        - id: restaurant-service
+          uri: lb://restaurant-service
+          predicates:
+            - Path=/api/v1/restaurants/**
+          filters:
+            - JwtAuthentication
+            - AddRequestHeader=X-Service-Name, api-gateway
+        
+        # Cart Service Routes
+        - id: cart-service
+          uri: lb://cart-service
+          predicates:
+            - Path=/api/v1/carts/**
+          filters:
+            - JwtAuthentication
+            - AddRequestHeader=X-Service-Name, api-gateway
+        
+        # Order Service Routes
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/api/v1/orders/**
+          filters:
+            - JwtAuthentication
+            - AddRequestHeader=X-Service-Name, api-gateway
+        
+        # Ordering Service Routes
+        - id: ordering-service
+          uri: lb://ordering-service
+          predicates:
+            - Path=/api/v1/ordering/**
+          filters:
+            - JwtAuthentication
+            - AddRequestHeader=X-Service-Name, api-gateway
+        
+        # Delivery Service Routes
+        - id: delivery-service
+          uri: lb://delivery-service
+          predicates:
+            - Path=/api/v1/deliveries/**
+          filters:
+            - JwtAuthentication
+            - AddRequestHeader=X-Service-Name, api-gateway
+        
+        # Payment Service Routes
+        - id: payment-service
+          uri: lb://payment-service
+          predicates:
+            - Path=/api/v1/payments/**
+          filters:
+            - JwtAuthentication
+            - AddRequestHeader=X-Service-Name, api-gateway
+        
+        # Notification Service Routes
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/v1/notifications/**
+          filters:
+            - JwtAuthentication
+            - AddRequestHeader=X-Service-Name, api-gateway
+        
+        # WebSocket Routes
+        - id: websocket-notification
+          uri: lb://notification-service
+          predicates:
+            - Path=/ws/**
+          filters:
+            - AddRequestHeader=X-Service-Name, api-gateway
+      
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 30s
+        pool:
+          type: elastic
+          max-idle-time: 15s
+          max-life-time: 60s
+      
+      loadbalancer:
+        use404: true
+    
+    consul:
+      host: ${CONSUL_HOST:localhost}
+      port: ${CONSUL_PORT:8500}
+      discovery:
+        enabled: true
+        health-check-path: /actuator/health
+        health-check-interval: 10s
+        instance-id: ${spring.application.name}:${server.port}
+        prefer-ip-address: true
+        tags:
+          - gateway
+          - api
+          - v1
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/auth/realms/doordash}
+          jwk-set-uri: ${JWT_JWK_SET_URI:${spring.security.oauth2.resourceserver.jwt.issuer-uri}/protocol/openid_connect/certs}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+          max-wait: 1000ms
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      retries: 3
+      acks: all
+
+# API Gateway Configuration
+gateway:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}
+    allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+    allowed-headers: "*"
+    allow-credentials: true
+    max-age: 3600
+  
+  rate-limiting:
+    enabled: true
+    default-requests-per-minute: ${RATE_LIMIT_REQUESTS_PER_MINUTE:100}
+    burst-capacity-multiplier: 2
+    anonymous-requests-per-minute: 20
+    admin-requests-per-minute: 1000
+  
+  security:
+    jwt:
+      header: Authorization
+      prefix: "Bearer "
+    public-paths:
+      - /actuator/health
+      - /actuator/info
+      - /actuator/prometheus
+      - /api-docs/**
+      - /swagger-ui/**
+      - /swagger-ui.html
+      - /v3/api-docs/**
+      - /api/v1/auth/login
+      - /api/v1/auth/register
+      - /api/v1/auth/refresh
+      - /api/v1/auth/verify
+      - /api/v1/users/register
+      - /api/v1/users/verify-email
+      - /api/v1/restaurants/search
+      - /api/v1/restaurants/*/menu
+      - /ws/**
+  
+  logging:
+    enabled: true
+    log-request-body: false
+    log-response-body: false
+    log-headers: true
+    sensitive-headers:
+      - Authorization
+      - Cookie
+      - Set-Cookie
+      - X-API-Key
+  
+  circuit-breaker:
+    enabled: true
+    failure-rate-threshold: 50
+    wait-duration-in-open-state: 30s
+    sliding-window-size: 10
+    minimum-number-of-calls: 5
+  
+  timeout:
+    global: 30s
+    auth-service: 10s
+    user-service: 15s
+    restaurant-service: 20s
+    cart-service: 10s
+    order-service: 25s
+    ordering-service: 30s
+    delivery-service: 20s
+    payment-service: 15s
+    notification-service: 10s
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+    instances:
+      auth-service:
+        base-config: default
+      user-service:
+        base-config: default
+      restaurant-service:
+        base-config: default
+      cart-service:
+        base-config: default
+      order-service:
+        base-config: default
+      ordering-service:
+        base-config: default
+      delivery-service:
+        base-config: default
+      payment-service:
+        base-config: default
+      notification-service:
+        base-config: default
+  
+  ratelimiter:
+    configs:
+      default:
+        limit-for-period: 100
+        limit-refresh-period: 60s
+        timeout-duration: 0s
+    instances:
+      auth-service:
+        limit-for-period: 20
+      user-service:
+        base-config: default
+      restaurant-service:
+        limit-for-period: 200
+      cart-service:
+        base-config: default
+      order-service:
+        base-config: default
+      ordering-service:
+        base-config: default
+      delivery-service:
+        base-config: default
+      payment-service:
+        limit-for-period: 50
+      notification-service:
+        base-config: default
+
+# Management and Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,gateway
+  endpoint:
+    health:
+      show-details: always
+    gateway:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.95,0.99
+    tags:
+      application: ${spring.application.name}
+
+# Logging Configuration
+logging:
+  level:
+    com.doordash.api_gateway: DEBUG
+    org.springframework.cloud.gateway: INFO
+    org.springframework.security: INFO
+    reactor.netty.http.client: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# OpenAPI Documentation
+springdoc:
+  api-docs:
+    enabled: true
+    path: /api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    urls:
+      - name: API Gateway
+        url: /api-docs
+      - name: Auth Service
+        url: http://localhost:8081/api-docs
+      - name: User Service
+        url: http://localhost:8083/api-docs
+      - name: Restaurant Service
+        url: http://localhost:8084/api-docs
+      - name: Cart Service
+        url: http://localhost:8085/api-docs
+      - name: Order Service
+        url: http://localhost:8082/api-docs
+      - name: Ordering Service
+        url: http://localhost:8086/api-docs
+      - name: Delivery Service
+        url: http://localhost:8088/api-docs
+      - name: Payment Service
+        url: http://localhost:8089/api-docs
+      - name: Notification Service
+        url: http://localhost:8087/api-docs
+
+# Distributed Tracing
+management.tracing:
+  sampling:
+    probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_BASE_URL:http://localhost:9411}/api/v2/spans
+
+# Kafka Topics for Logging and Events
+kafka:
+  topics:
+    gateway-logs: gateway-logs
+    gateway-metrics: gateway-metrics
+    security-events: security-events
+
+# API Versioning Configuration
+  versioning:
+    enabled: true
+    default-version: v1
+    supported-versions:
+      - v1
+      - v2
+      - v3
+    strategy-precedence:
+      - header
+      - path
+      - query
+      - default
+  
+  # OpenAPI Documentation Aggregation
+  api-docs:
+    enabled: true
+    services:
+      - auth-service
+      - user-service
+      - restaurant-service
+      - cart-service
+      - order-service
+      - ordering-service
+      - delivery-service
+      - payment-service
+      - notification-service
+    cache-timeout: 300 # seconds
+    retry-attempts: 3
+    connect-timeout: 5 # seconds
+  
+  # Global Error Handling
+  error-handling:
+    enabled: true
+    include-stack-trace: false
+    include-exception-details: false
+    log-errors: true
+  
+  # Request/Response Logging
+  request-response-logging:
+    enabled: true
+    log-request-body: false
+    log-response-body: false
+    log-headers: true
+    max-body-size: 1024 # bytes
+    sensitive-headers:
+      - Authorization
+      - Cookie
+      - Set-Cookie
+      - X-API-Key
+      - X-Auth-Token
