@@ -1,0 +1,347 @@
+# DoorDash User Service Prometheus Alerting Rules
+# Comprehensive alerting rules for monitoring user service health, performance, and security
+# 
+# Alert Severity Levels:
+# - Critical: Immediate action required, service impact
+# - Warning: Attention needed, potential issues
+# - Info: Informational, monitoring trends
+#
+# Integration:
+# - AlertManager for notification routing
+# - PagerDuty for critical alerts
+# - Slack for team notifications
+# - Grafana for dashboard integration
+
+groups:
+  # ========== SERVICE HEALTH ALERTS ==========
+  - name: user-service-health
+    rules:
+      # Service is down or unreachable
+      - alert: UserServiceDown
+        expr: up{job="user-service"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          service: user-service
+          team: backend
+          component: health
+        annotations:
+          summary: "User Service is down"
+          description: "User Service instance {{ $labels.instance }} has been down for more than 30 seconds"
+          runbook_url: "https://docs.doordash.com/runbooks/user-service/service-down"
+          dashboard_url: "https://grafana.doordash.com/d/user-service-overview"
+
+      # High error rate
+      - alert: UserServiceHighErrorRate
+        expr: (rate(doordash_user_authentication_total{status="failure"}[5m]) / rate(doordash_user_authentication_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          service: user-service
+          team: backend
+          component: authentication
+        annotations:
+          summary: "High error rate in User Service authentication"
+          description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+          runbook_url: "https://docs.doordash.com/runbooks/user-service/high-error-rate"
+
+      # Response time too high
+      - alert: UserServiceHighLatency
+        expr: histogram_quantile(0.95, rate(doordash_user_operation_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: user-service
+          team: backend
+          component: performance
+        annotations:
+          summary: "High latency in User Service operations"
+          description: "95th percentile latency is {{ $value }}s for the last 5 minutes"
+          runbook_url: "https://docs.doordash.com/runbooks/user-service/high-latency"
+
+  # ========== SECURITY ALERTS ==========
+  - name: user-service-security
+    rules:
+      # Multiple authentication failures
+      - alert: UserServiceAuthenticationFailureSpike
+        expr: rate(doordash_security_events_total{event_type="authentication_failure"}[5m]) > 10
+        for: 1m
+        labels:
+          severity: critical
+          service: user-service
+          team: security
+          component: authentication
+        annotations:
+          summary: "High rate of authentication failures"
+          description: "Authentication failure rate is {{ $value }} per second for the last 5 minutes"
+          runbook_url: "https://docs.doordash.com/runbooks/security/auth-failure-spike"
+
+      # Rate limiting triggered frequently
+      - alert: UserServiceRateLimitExceeded
+        expr: rate(doordash_security_rate_limit_exceeded_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+          service: user-service
+          team: security
+          component: rate-limiting
+        annotations:
+          summary: "High rate of rate limit violations"
+          description: "Rate limit exceeded {{ $value }} times per second for the last 5 minutes"
+          runbook_url: "https://docs.doordash.com/runbooks/security/rate-limit-exceeded"
+
+      # Suspicious security events
+      - alert: UserServiceSecurityEventSpike
+        expr: rate(doordash_security_events_total{severity="high"}[10m]) > 1
+        for: 1m
+        labels:
+          severity: critical
+          service: user-service
+          team: security
+          component: security-monitoring
+        annotations:
+          summary: "High severity security events detected"
+          description: "High severity security events occurring at {{ $value }} per second"
+          runbook_url: "https://docs.doordash.com/runbooks/security/security-event-spike"
+
+      # JWT token validation failures
+      - alert: UserServiceJwtValidationFailures
+        expr: rate(doordash_security_jwt_validate_total{status="failure"}[5m]) > 2
+        for: 3m
+        labels:
+          severity: warning
+          service: user-service
+          team: security
+          component: jwt-validation
+        annotations:
+          summary: "High rate of JWT validation failures"
+          description: "JWT validation failures at {{ $value }} per second for the last 5 minutes"
+          runbook_url: "https://docs.doordash.com/runbooks/security/jwt-validation-failures"
+
+  # ========== PERFORMANCE ALERTS ==========
+  - name: user-service-performance
+    rules:
+      # Database operation latency
+      - alert: UserServiceDatabaseLatency
+        expr: histogram_quantile(0.95, rate(doordash_performance_database_operation_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: user-service
+          team: backend
+          component: database
+        annotations:
+          summary: "High database operation latency"
+          description: "95th percentile database latency is {{ $value }}s"
+          runbook_url: "https://docs.doordash.com/runbooks/user-service/database-latency"
+
+      # HTTP client request latency
+      - alert: UserServiceHttpClientLatency
+        expr: histogram_quantile(0.95, rate(doordash_performance_http_client_request_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: user-service
+          team: backend
+          component: http-client
+        annotations:
+          summary: "High HTTP client request latency"
+          description: "95th percentile HTTP client latency is {{ $value }}s"
+          runbook_url: "https://docs.doordash.com/runbooks/user-service/http-client-latency"
+
+      # Cache miss rate too high
+      - alert: UserServiceHighCacheMissRate
+        expr: (rate(doordash_performance_cache_miss_total[5m]) / rate(doordash_performance_cache_hit_total[5m] + doordash_performance_cache_miss_total[5m])) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          service: user-service
+          team: backend
+          component: cache
+        annotations:
+          summary: "High cache miss rate"
+          description: "Cache miss rate is {{ $value | humanizePercentage }}"
+          runbook_url: "https://docs.doordash.com/runbooks/user-service/high-cache-miss-rate"
+
+  # ========== RESOURCE UTILIZATION ALERTS ==========
+  - name: user-service-resources
+    rules:
+      # High CPU usage
+      - alert: UserServiceHighCpuUsage
+        expr: rate(process_cpu_seconds_total{job="user-service"}[5m]) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          service: user-service
+          team: backend
+          component: system
+        annotations:
+          summary: "High CPU usage in User Service"
+          description: "CPU usage is {{ $value }}% for the last 5 minutes"
+          runbook_url: "https://docs.doordash.com/runbooks/user-service/high-cpu-usage"
+
+      # High memory usage
+      - alert: UserServiceHighMemoryUsage
+        expr: (doordash_system_memory_used{type="heap"} / doordash_system_memory_max{type="heap"}) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: user-service
+          team: backend
+          component: system
+        annotations:
+          summary: "High memory usage in User Service"
+          description: "Memory usage is {{ $value }}% of available heap"
+          runbook_url: "https://docs.doordash.com/runbooks/user-service/high-memory-usage"
+
+      # High GC pressure
+      - alert: UserServiceHighGcPressure
+        expr: rate(jvm_gc_collection_seconds_sum[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: user-service
+          team: backend
+          component: jvm
+        annotations:
+          summary: "High GC pressure in User Service"
+          description: "GC is consuming {{ $value | humanizePercentage }} of time"
+          runbook_url: "https://docs.doordash.com/runbooks/user-service/high-gc-pressure"
+
+      # Thread pool exhaustion
+      - alert: UserServiceThreadPoolExhaustion
+        expr: doordash_system_threadpool_active / doordash_system_threadpool_max > 0.9
+        for: 2m
+        labels:
+          severity: critical
+          service: user-service
+          team: backend
+          component: threading
+        annotations:
+          summary: "Thread pool near exhaustion"
+          description: "Thread pool {{ $labels.pool }} is {{ $value | humanizePercentage }} utilized"
+          runbook_url: "https://docs.doordash.com/runbooks/user-service/thread-pool-exhaustion"
+
+  # ========== BUSINESS METRICS ALERTS ==========
+  - name: user-service-business
+    rules:
+      # User registration rate anomaly
+      - alert: UserServiceLowRegistrationRate
+        expr: rate(doordash_user_registration_total{status="success"}[1h]) < 0.1
+        for: 30m
+        labels:
+          severity: warning
+          service: user-service
+          team: product
+          component: business
+        annotations:
+          summary: "Low user registration rate"
+          description: "User registration rate is {{ $value }} per second (1 hour average)"
+          runbook_url: "https://docs.doordash.com/runbooks/user-service/low-registration-rate"
+
+      # Active session count anomaly
+      - alert: UserServiceSessionCountAnomaly
+        expr: abs(doordash_system_sessions_active - avg_over_time(doordash_system_sessions_active[1d])) / avg_over_time(doordash_system_sessions_active[1d]) > 0.5
+        for: 15m
+        labels:
+          severity: info
+          service: user-service
+          team: backend
+          component: sessions
+        annotations:
+          summary: "Active session count anomaly"
+          description: "Active session count is {{ $value | humanizePercentage }} different from daily average"
+          runbook_url: "https://docs.doordash.com/runbooks/user-service/session-count-anomaly"
+
+  # ========== DEPENDENCY ALERTS ==========
+  - name: user-service-dependencies
+    rules:
+      # Database connection issues
+      - alert: UserServiceDatabaseConnectionFailure
+        expr: rate(doordash_performance_database_operation_duration_seconds_count{operation="connect"}[5m]) == 0 and rate(doordash_user_operation_duration_seconds_count[5m]) > 0
+        for: 2m
+        labels:
+          severity: critical
+          service: user-service
+          team: backend
+          component: database
+        annotations:
+          summary: "Database connection failures"
+          description: "No successful database connections while service is receiving requests"
+          runbook_url: "https://docs.doordash.com/runbooks/user-service/database-connection-failure"
+
+      # External service dependency failures
+      - alert: UserServiceExternalServiceFailure
+        expr: rate(doordash_performance_http_client_request_duration_seconds_count{status=~"5.."}[5m]) / rate(doordash_performance_http_client_request_duration_seconds_count[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          service: user-service
+          team: backend
+          component: external-services
+        annotations:
+          summary: "High failure rate for external service calls"
+          description: "External service failure rate is {{ $value | humanizePercentage }}"
+          runbook_url: "https://docs.doordash.com/runbooks/user-service/external-service-failure"
+
+  # ========== DISTRIBUTED TRACING ALERTS ==========
+  - name: user-service-tracing
+    rules:
+      # Missing trace data
+      - alert: UserServiceMissingTraceData
+        expr: absent(jaeger_spans_total{service_name="user-service"})
+        for: 5m
+        labels:
+          severity: warning
+          service: user-service
+          team: backend
+          component: observability
+        annotations:
+          summary: "Missing trace data for User Service"
+          description: "No trace data received from User Service for 5 minutes"
+          runbook_url: "https://docs.doordash.com/runbooks/observability/missing-trace-data"
+
+      # High trace error rate
+      - alert: UserServiceHighTraceErrorRate
+        expr: rate(jaeger_spans_total{service_name="user-service",status="error"}[5m]) / rate(jaeger_spans_total{service_name="user-service"}[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+          service: user-service
+          team: backend
+          component: observability
+        annotations:
+          summary: "High error rate in distributed traces"
+          description: "Trace error rate is {{ $value | humanizePercentage }}"
+          runbook_url: "https://docs.doordash.com/runbooks/observability/high-trace-error-rate"
+
+  # ========== CUSTOM BUSINESS ALERTS ==========
+  - name: user-service-custom-business
+    rules:
+      # Unusual user engagement patterns
+      - alert: UserServiceEngagementDrop
+        expr: rate(doordash_business_user_engagement_total[1h]) < avg_over_time(rate(doordash_business_user_engagement_total[1h])[7d:1h]) * 0.7
+        for: 30m
+        labels:
+          severity: info
+          service: user-service
+          team: product
+          component: engagement
+        annotations:
+          summary: "Significant drop in user engagement"
+          description: "User engagement rate is {{ $value | humanizePercentage }} below 7-day average"
+          runbook_url: "https://docs.doordash.com/runbooks/user-service/engagement-drop"
+
+      # Profile update anomalies
+      - alert: UserServiceProfileUpdateSpike
+        expr: rate(doordash_user_profile_update_total[10m]) > avg_over_time(rate(doordash_user_profile_update_total[10m])[1d:10m]) * 3
+        for: 10m
+        labels:
+          severity: info
+          service: user-service
+          team: product
+          component: profile
+        annotations:
+          summary: "Unusual spike in profile updates"
+          description: "Profile update rate is {{ $value }}x higher than daily average"
+          runbook_url: "https://docs.doordash.com/runbooks/user-service/profile-update-spike"

@@ -38,6 +38,11 @@ import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.header.writers.XXssProtectionHeaderWriter;
 import org.springframework.web.cors.CorsConfigurationSource;
+import io.opentracing.Tracer;
+import io.jaegertracing.Configuration;
+import io.jaegertracing.internal.samplers.ConstSampler;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.prometheus.PrometheusMeterRegistry;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.security.interfaces.RSAPrivateKey;
@@ -363,5 +368,53 @@ public class OAuth2SecurityConfig {
         DefaultMethodSecurityExpressionHandler expressionHandler = new DefaultMethodSecurityExpressionHandler();
         expressionHandler.setPermissionEvaluator(new DoorDashPermissionEvaluator());
         return expressionHandler;
+    }
+
+    /**
+     * Jaeger Tracer Configuration for Distributed Tracing Integration.
+     * 
+     * @return Tracer Jaeger tracer for security event tracing
+     */
+    @Bean
+    @ConditionalOnProperty(value = "app.observability.jaeger.enabled", havingValue = "true", matchIfMissing = true)
+    public Tracer jaegerTracer() {
+        log.info("Configuring Jaeger tracer for security events");
+        
+        io.jaegertracing.Configuration.SamplerConfiguration samplerConfig = 
+            io.jaegertracing.Configuration.SamplerConfiguration.fromEnv()
+                .withType("const")
+                .withParam(1.0);
+
+        io.jaegertracing.Configuration.ReporterConfiguration reporterConfig = 
+            io.jaegertracing.Configuration.ReporterConfiguration.fromEnv()
+                .withLogSpans(true);
+
+        io.jaegertracing.Configuration config = new io.jaegertracing.Configuration("user-service-security")
+            .withSampler(samplerConfig)
+            .withReporter(reporterConfig);
+
+        return config.getTracer();
+    }
+
+    /**
+     * Prometheus Meter Registry for Security Metrics.
+     * 
+     * @return PrometheusMeterRegistry metrics registry for security monitoring
+     */
+    @Bean
+    @ConditionalOnProperty(value = "app.observability.metrics.enabled", havingValue = "true", matchIfMissing = true)
+    public PrometheusMeterRegistry prometheusMeterRegistry() {
+        log.info("Configuring Prometheus meter registry for security metrics");
+        
+        PrometheusMeterRegistry registry = new PrometheusMeterRegistry(
+            io.micrometer.prometheus.PrometheusConfig.DEFAULT);
+        
+        registry.config().commonTags(
+            "service", "user-service",
+            "component", "security",
+            "environment", System.getProperty("spring.profiles.active", "development")
+        );
+        
+        return registry;
     }
 }
