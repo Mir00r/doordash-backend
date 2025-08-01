@@ -1,22 +1,39 @@
+# DoorDash User Service - Security Configuration
+# Production-ready security settings with OAuth2, JWT, and comprehensive protection
+
+# Server Configuration
+server:
+  port: 8080
+  ssl:
+    enabled: false # Enable in production with proper certificates
+    key-store: classpath:keystore.p12
+    key-store-password: ${SSL_KEYSTORE_PASSWORD:changeit}
+    key-store-type: PKCS12
+    key-alias: doordash-user-service
+  error:
+    include-stacktrace: never
+    include-message: always
+
 spring:
   application:
-    name: user-service
+    name: doordash-user-service
   
   profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
+    active: ${SPRING_PROFILES_ACTIVE:development}
   
   # Database Configuration
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/user_db}
-    username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:postgres}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:doordash_users}
+    username: ${DB_USERNAME:doordash_user}
+    password: ${DB_PASSWORD:secure_password}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
+      connection-timeout: 20000
       idle-timeout: 300000
       max-lifetime: 1200000
-      connection-timeout: 20000
+      leak-detection-threshold: 60000
   
   # JPA Configuration
   jpa:
@@ -27,9 +44,10 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
-        use_sql_comments: true
         jdbc:
           batch_size: 20
+        order_inserts: true
+        order_updates: true
   
   # Flyway Configuration
   flyway:
@@ -39,17 +57,18 @@ spring:
     validate-on-migrate: true
   
   # Redis Configuration
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
-      timeout: 2000ms
-      lettuce:
-        pool:
-          max-active: 8
-          max-idle: 8
-          min-idle: 0
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: 0
+    timeout: 5000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: -1ms
   
   # Cache Configuration
   cache:
@@ -60,6 +79,8 @@ spring:
   # Kafka Configuration
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    security:
+      protocol: ${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -68,12 +89,12 @@ spring:
       properties:
         enable.idempotence: true
     consumer:
-      group-id: user-service
+      group-id: user-service-group
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       auto-offset-reset: earliest
       properties:
-        spring.json.trusted.packages: "com.doordash.*"
+        spring.json.trusted.packages: com.doordash.user_service
   
   # Mail Configuration
   mail:
@@ -88,18 +109,177 @@ spring:
           starttls:
             enable: true
   
-  # Security Configuration
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8081}
-  
   # Servlet Configuration
   servlet:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
+
+# Security Configuration
+app:
+  security:
+    # JWT Configuration
+    jwt:
+      enabled: true
+      algorithm: ${JWT_ALGORITHM:RS256}
+      secret: ${JWT_SECRET:} # For HS256 algorithm (minimum 32 characters)
+      # RSA keys for RS256 algorithm (load from environment or files)
+      public-key-location: ${JWT_PUBLIC_KEY_LOCATION:}
+      private-key-location: ${JWT_PRIVATE_KEY_LOCATION:}
+      access-token-expiration: PT15M # 15 minutes
+      refresh-token-expiration: P7D # 7 days
+      issuer: ${JWT_ISSUER:doordash-user-service}
+      audience: ${JWT_AUDIENCE:doordash-api}
+      cache-enabled: true
+      cache-size: 1000
+      cache-ttl: PT5M
+    
+    # CORS Configuration
+    cors:
+      allowed-origins:
+        - ${FRONTEND_URL:http://localhost:3000}
+        - ${ADMIN_URL:http://localhost:3001}
+        - ${API_GATEWAY_URL:http://localhost:8080}
+        - https://doordash.com
+        - https://admin.doordash.com
+        - https://api.doordash.com
+      allowed-methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - PATCH
+        - OPTIONS
+      allowed-headers:
+        - Authorization
+        - Content-Type
+        - X-Requested-With
+        - X-CSRF-Token
+        - X-Forwarded-For
+        - X-Real-IP
+        - X-Correlation-ID
+        - X-Request-ID
+      exposed-headers:
+        - X-Total-Count
+        - X-Rate-Limit-Remaining
+        - X-Rate-Limit-Reset
+        - X-Request-ID
+      allow-credentials: true
+      max-age: PT1H
+    
+    # CSRF Configuration
+    csrf:
+      enabled: true
+      cookie-name: XSRF-TOKEN
+      header-name: X-XSRF-TOKEN
+      parameter-name: _csrf
+      http-only: false
+      secure: ${CSRF_SECURE:true}
+      same-site: Strict
+      token-expiration: PT1H
+    
+    # Rate Limiting Configuration
+    rate-limit:
+      enabled: true
+      algorithm: TOKEN_BUCKET
+      capacity: ${RATE_LIMIT_CAPACITY:100}
+      refill-rate: ${RATE_LIMIT_REFILL_RATE:10}
+      window: PT1M
+      burst-capacity: ${RATE_LIMIT_BURST:200}
+      key-strategy: ${RATE_LIMIT_STRATEGY:IP}
+      excluded-paths:
+        - /actuator/health
+        - /actuator/info
+        - /swagger-ui/**
+        - /v3/api-docs/**
+    
+    # Session Configuration
+    session:
+      max-concurrent-sessions: 1
+      timeout: PT30M
+      fixation-protection: true
+      cookie-name: JSESSIONID
+      http-only: true
+      secure: ${SESSION_SECURE:true}
+      same-site: Strict
+    
+    # Password Policy Configuration
+    password:
+      min-length: 12
+      max-length: 128
+      require-uppercase: true
+      require-lowercase: true
+      require-digits: true
+      require-special-chars: true
+      bcrypt-strength: ${BCRYPT_STRENGTH:12}
+      history-size: 5
+      lockout-threshold: 5
+      lockout-duration: PT15M
+    
+    # Security Audit Configuration
+    audit:
+      enabled: true
+      log-level: INFO
+      audit-events:
+        - AUTHENTICATION_SUCCESS
+        - AUTHENTICATION_FAILURE
+        - AUTHORIZATION_FAILURE
+        - PASSWORD_CHANGE
+        - ACCOUNT_LOCKED
+        - PRIVILEGE_ESCALATION
+        - DATA_ACCESS
+        - CONFIGURATION_CHANGE
+      include-request-details: true
+      include-response-details: false
+      retention-period: P90D
+    
+    # Security Headers Configuration
+    headers:
+      enabled: true
+      frame-options: DENY
+      content-type-options: nosniff
+      xss-protection: "1; mode=block"
+      referrer-policy: strict-origin-when-cross-origin
+      content-security-policy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' https:; connect-src 'self' https://api.doordash.com"
+      hsts:
+        enabled: true
+        max-age: 31536000
+        include-subdomains: true
+        preload: false
+    
+    # OAuth2 Configuration
+    oauth2:
+      clients:
+        - client-id: ${OAUTH2_CLIENT_ID:doordash-frontend}
+          client-secret: ${OAUTH2_CLIENT_SECRET:}
+          grant-types:
+            - authorization_code
+            - refresh_token
+          scopes:
+            - read
+            - write
+            - user:profile
+          redirect-uris:
+            - ${FRONTEND_URL:http://localhost:3000}/auth/callback
+          access-token-validity: PT15M
+          refresh-token-validity: P7D
+      
+      resource-server:
+        resource-id: doordash-api
+        stateless: true
+        token-check-interval: PT5M
+      
+      service-auth:
+        client-id: user-service
+        client-secret: ${SERVICE_CLIENT_SECRET:}
+        trusted-services:
+          - api-gateway
+          - auth-service
+          - order-service
+          - restaurant-service
+          - delivery-service
+          - payment-service
+          - notification-service
 
 # Server Configuration
 server:
@@ -111,22 +291,25 @@ server:
   http2:
     enabled: true
 
-# Management and Actuator
+# Management and Monitoring
 management:
   endpoints:
     web:
       exposure:
         include: health,info,metrics,prometheus
+      base-path: /actuator
   endpoint:
     health:
       show-details: when-authorized
+      roles: ADMIN
+    info:
+      enabled: true
   metrics:
     export:
       prometheus:
         enabled: true
-  tracing:
-    sampling:
-      probability: 0.1
+  security:
+    enabled: true
 
 # Application Configuration
 app:
@@ -258,8 +441,173 @@ logging:
     com.doordash.user_service: DEBUG
     org.springframework.security: DEBUG
 
+# Logging Configuration
+logging:
+  level:
+    com.doordash.user_service: INFO
+    com.doordash.user_service.security: DEBUG
+    org.springframework.security: INFO
+    org.springframework.web.cors: DEBUG
+    org.hibernate.SQL: ERROR
+    org.hibernate.type.descriptor.sql.BasicBinder: ERROR
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{correlationId}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%X{correlationId}] %logger{36} - %msg%n"
+  file:
+    name: logs/user-service.log
+    max-size: 10MB
+    max-history: 30
+
+# Custom Application Configuration
+doordash:
+  user-service:
+    version: 1.0.0
+    api:
+      version: v1
+      base-path: /api/v1
+    
+    # Service Discovery
+    discovery:
+      enabled: true
+      service-url: ${DISCOVERY_URL:http://localhost:8761/eureka}
+    
+    # Circuit Breaker Configuration
+    circuit-breaker:
+      enabled: true
+      failure-rate-threshold: 50
+      wait-duration-in-open-state: PT30S
+      sliding-window-size: 10
+      minimum-number-of-calls: 5
+    
+    # Distributed Tracing
+    tracing:
+      enabled: true
+      sampling-probability: ${TRACING_SAMPLING:0.1}
+      jaeger:
+        endpoint: ${JAEGER_ENDPOINT:http://localhost:14268/api/traces}
+    
+    # Business Rules
+    business:
+      max-login-attempts: 5
+      account-lockout-duration: PT15M
+      password-reset-expiry: PT1H
+      email-verification-expiry: P1D
+      session-timeout: PT30M
+    
+    # Integration Settings
+    integration:
+      auth-service:
+        url: ${AUTH_SERVICE_URL:http://localhost:8081}
+        timeout: PT5S
+        retry-attempts: 3
+      
+      notification-service:
+        url: ${NOTIFICATION_SERVICE_URL:http://localhost:8083}
+        timeout: PT10S
+        retry-attempts: 2
+      
+      order-service:
+        url: ${ORDER_SERVICE_URL:http://localhost:8084}
+        timeout: PT5S
+        retry-attempts: 3
+
 ---
-# Test Profile
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: development
+  
+  # Development Database
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+  
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+# Development Security (More Permissive)
+app:
+  security:
+    jwt:
+      algorithm: HS256
+      secret: development-secret-key-minimum-32-characters-long
+    cors:
+      allowed-origins:
+        - "*"
+    csrf:
+      enabled: false
+    rate-limit:
+      enabled: false
+    password:
+      bcrypt-strength: 4
+
+logging:
+  level:
+    com.doordash.user_service: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
+
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: production
+
+# Production Security (Strict)
+app:
+  security:
+    jwt:
+      algorithm: RS256
+      # RSA keys should be loaded from secure key management service
+    cors:
+      allowed-origins:
+        - https://doordash.com
+        - https://admin.doordash.com
+        - https://api.doordash.com
+    csrf:
+      enabled: true
+      secure: true
+    rate-limit:
+      enabled: true
+      capacity: 60
+      refill-rate: 5
+    session:
+      secure: true
+    headers:
+      hsts:
+        enabled: true
+        preload: true
+
+# Production Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    com.doordash.user_service: INFO
+    com.doordash.user_service.security: WARN
+    org.springframework.security: WARN
+    root: WARN
+
+---
+# Test Profile - Existing configuration
 spring:
   config:
     activate:
@@ -286,7 +634,7 @@ app:
       provider: mock
 
 ---
-# Docker Profile
+# Docker Profile - Existing configuration
 spring:
   config:
     activate:
