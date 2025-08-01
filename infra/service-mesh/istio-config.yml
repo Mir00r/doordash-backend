@@ -1,0 +1,298 @@
+# Istio Service Mesh Configuration for DoorDash Backend
+# This file configures Istio service mesh for advanced traffic management, security, and observability
+
+# ========== ISTIO GATEWAY CONFIGURATION ==========
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: doordash-gateway
+  namespace: doordash
+  labels:
+    app: doordash-backend
+    version: v1
+    environment: production
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - api.doordash.com
+    - admin.doordash.com
+    - restaurant.doordash.com
+    tls:
+      httpsRedirect: true
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    hosts:
+    - api.doordash.com
+    - admin.doordash.com
+    - restaurant.doordash.com
+    tls:
+      mode: SIMPLE
+      credentialName: doordash-tls-cert
+
+---
+# ========== VIRTUAL SERVICE CONFIGURATION ==========
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: doordash-api-routes
+  namespace: doordash
+spec:
+  hosts:
+  - api.doordash.com
+  gateways:
+  - doordash-gateway
+  http:
+  # Authentication Service Routes
+  - match:
+    - uri:
+        prefix: "/api/v1/auth"
+    route:
+    - destination:
+        host: auth-service
+        port:
+          number: 8080
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+      retryOn: 5xx,gateway-error,connect-failure,refused-stream
+    
+  # User Service Routes
+  - match:
+    - uri:
+        prefix: "/api/v1/users"
+    route:
+    - destination:
+        host: user-service
+        port:
+          number: 8080
+        subset: stable
+      weight: 90
+    - destination:
+        host: user-service
+        port:
+          number: 8080
+        subset: canary
+      weight: 10
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s
+    timeout: 15s
+    
+  # Restaurant Service Routes
+  - match:
+    - uri:
+        prefix: "/api/v1/restaurants"
+    route:
+    - destination:
+        host: restaurant-service
+        port:
+          number: 8080
+    headers:
+      request:
+        add:
+          x-service-route: restaurant-service
+    timeout: 20s
+    
+  # Order Service Routes
+  - match:
+    - uri:
+        prefix: "/api/v1/orders"
+    route:
+    - destination:
+        host: order-service
+        port:
+          number: 8080
+    corsPolicy:
+      allowOrigins:
+      - exact: https://doordash.com
+      - exact: https://www.doordash.com
+      allowMethods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - OPTIONS
+      allowHeaders:
+      - Authorization
+      - Content-Type
+      - X-Requested-With
+      - X-Tenant-ID
+      allowCredentials: true
+      maxAge: 24h
+    
+  # Cart Service Routes
+  - match:
+    - uri:
+        prefix: "/api/v1/cart"
+    route:
+    - destination:
+        host: cart-service
+        port:
+          number: 8080
+    timeout: 10s
+    
+  # Payment Service Routes
+  - match:
+    - uri:
+        prefix: "/api/v1/payments"
+    route:
+    - destination:
+        host: payment-service
+        port:
+          number: 8080
+    timeout: 45s
+    retries:
+      attempts: 2
+      perTryTimeout: 22s
+    
+  # Notification Service Routes
+  - match:
+    - uri:
+        prefix: "/api/v1/notifications"
+    route:
+    - destination:
+        host: notification-service
+        port:
+          number: 8080
+    timeout: 5s
+
+---
+# ========== DESTINATION RULES ==========
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: user-service-destination
+  namespace: doordash
+spec:
+  host: user-service
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+        connectTimeout: 30s
+        tcpKeepalive:
+          time: 7200s
+          interval: 75s
+      http:
+        http1MaxPendingRequests: 50
+        http2MaxRequests: 100
+        maxRequestsPerConnection: 10
+        maxRetries: 3
+        consecutiveGatewayErrors: 5
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 50
+    loadBalancer:
+      simple: LEAST_CONN
+    outlierDetection:
+      consecutiveGatewayErrors: 5
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+  subsets:
+  - name: stable
+    labels:
+      version: stable
+  - name: canary
+    labels:
+      version: canary
+
+---
+# ========== SERVICE MESH SECURITY POLICIES ==========
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: doordash-mtls
+  namespace: doordash
+spec:
+  mtls:
+    mode: STRICT
+
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: doordash-authz
+  namespace: doordash
+spec:
+  selector:
+    matchLabels:
+      app: user-service
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/doordash/sa/api-gateway"]
+    - source:
+        principals: ["cluster.local/ns/doordash/sa/auth-service"]
+    to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        paths: ["/api/v1/users/*"]
+    when:
+    - key: source.ip
+      notValues: ["10.0.0.0/8"]  # Block internal network access
+  - from:
+    - source:
+        namespaces: ["doordash"]
+    to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/actuator/health", "/actuator/info"]
+
+---
+# ========== TRAFFIC MANAGEMENT ==========
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: external-payment-gateway
+  namespace: doordash
+spec:
+  hosts:
+  - api.stripe.com
+  - api.paypal.com
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  location: MESH_EXTERNAL
+  resolution: DNS
+
+---
+# ========== TELEMETRY CONFIGURATION ==========
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: doordash-metrics
+  namespace: doordash
+spec:
+  metrics:
+  - providers:
+    - name: prometheus
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        request_protocol:
+          value: "istio_request_protocol | 'unknown'"
+        source_service:
+          value: "source.workload.name | 'unknown'"
+        destination_service:
+          value: "destination.service.name | 'unknown'"
+  accessLogging:
+  - providers:
+    - name: otel
+    filter:
+      expression: 'response.code >= 400'
